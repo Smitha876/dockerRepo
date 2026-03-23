@@ -3,10 +3,11 @@ pipeline {
 
     environment {
         DOCKER_IMAGE = "smitha8090/myapp"
+        // Use the ID of the credentials stored in Jenkins
+        DOCKER_HUB_CREDS = 'dockerhub-creds' 
     }
 
     stages {
-
         stage('Clone Repository') {
             steps {
                 git 'https://github.com/Smitha876/dockerRepo.git'
@@ -16,19 +17,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build("${DOCKER_IMAGE}:latest")
-                }
-            }
-        }
-
-        stage('Login to Docker Hub') {
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-creds',
-                    usernameVariable: 'smitha8090',
-                    passwordVariable: 'Docker Hub Access Token'
-                )]) {
-                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                    // It's cleaner to capture the image object
+                    app = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
+                    app.tag("latest")
                 }
             }
         }
@@ -36,8 +27,10 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('', 'dockerhub-creds') {
-                        docker.image("${DOCKER_IMAGE}:latest").push()
+                    // This handles login, pushing, and logout automatically
+                    docker.withRegistry('', DOCKER_HUB_CREDS) {
+                        app.push("${BUILD_NUMBER}")
+                        app.push("latest")
                     }
                 }
             }
@@ -46,10 +39,10 @@ pipeline {
 
     post {
         success {
-            echo 'Image successfully built and pushed to Docker Hub'
+            echo "Image ${DOCKER_IMAGE} successfully pushed!"
         }
         failure {
-            echo 'Pipeline failed'
+            echo 'Pipeline failed. Check the console output for errors.'
         }
     }
 }
