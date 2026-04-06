@@ -1,48 +1,38 @@
 pipeline {
     agent any
-
+    
     environment {
-        DOCKER_IMAGE = "smitha8090/myapp"
-        // Use the ID of the credentials stored in Jenkins
-        DOCKER_HUB_CREDS = 'dockerhub-creds' 
+        DOCKER_CREDS = credentials('dockerhub-creds')
+        REGISTRY = "smitha8090/myapp"
     }
-
+    
     stages {
-        stage('Clone Repository') {
+        stage('Clone') {
             steps {
-                git 'https://github.com/Smitha876/dockerRepo.git'
+                checkout scm
             }
         }
-
+        
         stage('Build Docker Image') {
             steps {
-                script {
-                    // It's cleaner to capture the image object
-                    app = docker.build("${DOCKER_IMAGE}:${BUILD_NUMBER}")
-                    app.tag("latest")
-                }
+                bat "docker build -t %REGISTRY%:latest ."
             }
         }
-
-        stage('Push Docker Image') {
+        
+        stage('Push to Docker Hub') {
             steps {
-                script {
-                    // This handles login, pushing, and logout automatically
-                    docker.withRegistry('', DOCKER_HUB_CREDS) {
-                        app.push("${BUILD_NUMBER}")
-                        app.push("latest")
-                    }
-                }
+                // This uses the credentials we updated to 'rakshaa21'
+                bat "echo %DOCKER_CREDS_PSW% | docker login -u %DOCKER_CREDS_USR% --password-stdin"
+                bat "docker push %REGISTRY%:latest"
             }
         }
     }
-
+    
+    // Ensure this 'post' block is BEFORE the final closing brace of the pipeline
     post {
-        success {
-            echo "Image ${DOCKER_IMAGE} successfully pushed!"
-        }
-        failure {
-            echo 'Pipeline failed. Check the console output for errors.'
+        always {
+            // This needs the 'node' context to run 'bat'
+            bat "docker rmi %REGISTRY%:latest || exit 0"
         }
     }
 }
